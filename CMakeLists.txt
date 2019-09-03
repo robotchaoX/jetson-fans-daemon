@@ -28,6 +28,5 @@ SET(CMAKE_BUILD_TYPE DEBUG)
 #主函数生成可执行文件
 add_executable(main ${DIR_SRCS})
 
-
 #设置链接库,将executable目标文件与库文件进行链接
-#target_link_libraries(main ${OpenCV_LIBS})
+target_link_libraries(main -lpthread)

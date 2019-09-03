@@ -6,6 +6,8 @@ if [ $EUID != 0 ]; then
     exit $?
 fi
 
+echo "uninstall previous ..."
+bash ./uninstall.sh
 echo "setting to /usr/local/bin/fan-daemon/..."
 rm -rf /usr/bin/fan-daemon/ 2>/dev/null
 mkdir /usr/local/bin/fan-daemon

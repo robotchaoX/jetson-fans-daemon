@@ -1,9 +1,13 @@
-# Jetson Nano fan control daemon
-Fan control daemon for the Nvidia Jetson Nano. Written in C++ to reduce the memory usage.
+# Jetson fan control daemon
+Fan control daemon for the Nvidia Jetson Nano or TX. Written in C++ to reduce the memory usage.
 
 This project is based off a similar project written in Python and found here
 
 https://github.com/Pyrestone/jetson-fan-ctl
+
+And the origin C++ version can be found here
+
+https://github.com/hooperbill/fan-daemon
 
 ## Requirements:
 
@@ -26,6 +30,8 @@ The code is contained in a Code::Blocks project. You do not need to install
 Code::Blocks to build the project. To build without Code::BLocks cd into the
 project directory and execute
 
+    cd build 
+    cmake ..
     make all
 
 This will build the project and place the executable in the project's
@@ -52,6 +58,7 @@ editor and modify the following defines:
 <code>#define UPDATE_INTERVAL 2</code>
 
 <code>FAN_OFF_TEMP</code> is the temperature (°C) below which the fan is turned off.
+
 <code>FAN_MAX_TEMP</code> is the temperature (°C) above which the fan is at 100% speed.
 
 The daemon will interpolate linearly between these two points to determine the

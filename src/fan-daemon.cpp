@@ -24,19 +24,19 @@
  */
 
 #include "fan-daemon.h"
-#include <cstring>
 
 using namespace std;
 
 // static unsigned pwmCap; // maximum value that the fan PWM channel can support
 
 /**
- * Exit handler. Shutoff the fan before leaving
+ * Exit handler. Set the fan PWM value before leaving
+ * If you stop the fan control daemon with  `sudo service fan-daemon stop` the fan is set to the fan PWM cap value.
  */
 // 信号处理函数
 void exit_handler(int sig) {
     static unsigned pwmCap2; // maximum value that the fan PWM channel can support
-    cout << "oh, got a signal %d\n" << sig << endl;
+    cout << "oh, got a signal : " << sig << endl;
     if (pwmCap2 <= 0)
         pwmCap2 = readIntSysFs(PWM_CAP); // PWM maximum value
     writeIntSysFs("/sys/devices/pwm-fan/target_pwm", pwmCap2);
@@ -85,11 +85,6 @@ void init_exit_handler() {
  * Main
  */
 int main(int argc, char *argv[]) {
-    //    int temperature;   // temperature
-    //    unsigned pwmValue; // 0-255
-
-    //    pwmCap = getPwmCap(); // PWM maximum value
-    //    cout << "pwmCap:" << pwmCap << endl;
 
     init_exit_handler(); //
 
@@ -101,7 +96,7 @@ int main(int argc, char *argv[]) {
     //        int error = -1;
     //    }
     // max performance
-    system(JETSON_CLOCKS); // bash /usr/bin/jetson_clocks
+    //    system(JETSON_CLOCKS); // bash /usr/bin/jetson_clocks
 
     while (true) {
         thermalControl();
@@ -111,33 +106,48 @@ int main(int argc, char *argv[]) {
 }
 
 /**
- * Read an unsigned integer value from a sysfs path
+ * Read an integer value from a sysfs path
  */
-unsigned readIntSysFs(string path) {
-    unsigned value;
-
-    ifstream infs(path);
-    infs >> value;
+int readIntSysFs(string path) {
+    int value = 0;
+    //    ifstream infs(path,ios::in); // 构造函数方式打开文件
+    ifstream infs;
+    infs.open(path); // 默认打开方式ios::in，可省
+    if (!infs.fail()) {
+        infs >> value;
+    } else {
+        cout << "readIntSysFs failed: " << path << endl;
+        value = -1;
+    }
     infs.close();
-
     return value;
 }
 
 /**
  * Write an unsigned integer value to a sysfs path
  */
-void writeIntSysFs(string path, unsigned value) {
-    ofstream outfs(path);
-    outfs << value;
+int writeIntSysFs(string path, unsigned value) {
+    int error = 0;
+    //    ofstream outfs(path, ios::out | ios::trunc); // 构造函数方式打开文件
+    ofstream outfs;
+    outfs.open(path, ios::out | ios::trunc); // 默认打开方式ios::out|ios::trunc,可省
+    if (!outfs.fail()) {
+        outfs << value;
+        error = 0;
+    } else {
+        cout << "writeIntSysFs failed: " << path << endl;
+        error = -1;
+    }
     outfs.close();
+    return error;
 }
 
 /**
  * Read the average temperature. The function reads all thermal zones and returns the average.
  *
  */
-int readAverageTemp() {
-    int averageTemp = 0;
+float readAverageTemp() {
+    float averageTemp = 0;
     glob_t globResult;
 
     // glob() // find pathnames matching a pattern,Linux文件系统中路径名称的模式匹配，
@@ -156,7 +166,6 @@ int readAverageTemp() {
     }
     averageTemp = (averageTemp / globResult.gl_pathc) / 1000;
     //    globfree(&globResult); // cleanup
-
     return averageTemp;
 }
 
@@ -170,7 +179,7 @@ int getPwmCap() { return readIntSysFs(PWM_CAP); }
  * fan PWM cap value.
  */
 // unsigned adjustFanSpeed(int temp) {
-unsigned adjustFanSpeed(int tempe, int fanOffTempe, int fanMaxTempe) {
+unsigned adjustFanSpeed(float tempe, int fanOffTempe, int fanMaxTempe) {
     static unsigned pwmCap; // maximum value that the fan PWM channel can support
     unsigned fanPWMSpeed = 0;
     if (pwmCap <= 0) {
@@ -178,8 +187,10 @@ unsigned adjustFanSpeed(int tempe, int fanOffTempe, int fanMaxTempe) {
         //    pwmCap = getPwmCap(); // PWM maximum value
         cout << "pwmCap:" << pwmCap << endl;
     }
-    fanPWMSpeed = pwmCap * (tempe - fanOffTempe) / (fanMaxTempe - fanOffTempe); // #define
-    if (fanPWMSpeed <= pwmCap / 5) // 太慢就不需要转了,real FAN_OFF_TEMP = (FAN_MAX_TEMP + 4 * FAN_OFF_TEMP) / 5
+    //    fanPWMSpeed = pwmCap * (tempe - fanOffTempe) / (fanMaxTempe - fanOffTempe); // #define
+    // upper real FAN_OFF_TEMP = (FAN_MAX_TEMP + 4 * FAN_OFF_TEMP) / 5
+    fanPWMSpeed = pwmCap * ((tempe - fanOffTempe) / (fanMaxTempe - fanOffTempe) * 0.8 + 0.2); // #define
+    if (fanPWMSpeed <= pwmCap * 0.2) // 太慢就不需要转了
         fanPWMSpeed = 0;
     else if (fanPWMSpeed >= pwmCap)
         fanPWMSpeed = pwmCap;
@@ -194,11 +205,13 @@ unsigned adjustFanSpeed(int tempe, int fanOffTempe, int fanMaxTempe) {
  */
 // int thermalControl() {
 int thermalControl(int updateInterval_s) {
-    int temperature;          // temperature
+    float temperature;        // temperature
     unsigned fanPWMValue = 0; // 0-255
 
     temperature = readAverageTemp();
+    cout << "temperature:" << temperature << endl;
     fanPWMValue = adjustFanSpeed(temperature);
+    cout << "fanPWMValue:" << fanPWMValue << endl;
     writeIntSysFs(TARGET_PWM, fanPWMValue);
     // 阻塞当前线程rel_time的时间
     this_thread::sleep_for(chrono::milliseconds(updateInterval_s * 1000)); // milliseconds 毫秒
