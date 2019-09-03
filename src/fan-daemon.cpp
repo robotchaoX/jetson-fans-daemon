@@ -27,8 +27,6 @@
 
 using namespace std;
 
-// static unsigned pwmCap; // maximum value that the fan PWM channel can support
-
 /**
  * Exit handler. Set the fan PWM value before leaving
  * If you stop the fan control daemon with  `sudo service fan-daemon stop` the fan is set to the fan PWM cap value.
@@ -36,7 +34,7 @@ using namespace std;
 // 信号处理函数
 void exit_handler(int sig) {
     static unsigned pwmCap2; // maximum value that the fan PWM channel can support
-    cout << "oh, got a signal : " << sig << endl;
+    cout << "*** Oh, got a signal : " << sig << endl;
     if (pwmCap2 <= 0)
         pwmCap2 = readIntSysFs(PWM_CAP); // PWM maximum value
     writeIntSysFs("/sys/devices/pwm-fan/target_pwm", pwmCap2);
@@ -86,7 +84,7 @@ void init_exit_handler() {
  */
 int main(int argc, char *argv[]) {
 
-    init_exit_handler(); //
+    init_exit_handler(); // Exit handler before leaving
 
     //    char cmd[128] = {0};
     //    bzero(cmd, sizeof(cmd));
@@ -149,7 +147,7 @@ int writeIntSysFs(string path, unsigned value) {
 float readAverageTemp() {
     float averageTemp = 0;
     glob_t globResult;
-
+    int thermal_zone;
     // glob() // find pathnames matching a pattern,Linux文件系统中路径名称的模式匹配，
     // 查找文件系统中指定模式的路径名
     //    typedef struct
@@ -159,12 +157,17 @@ float readAverageTemp() {
     //        size_t gl_offs;     /* Slots to reserve in ‘gl_pathv’.  */
     //    } glob_t;
 
+    // cat /sys/devices/virtual/thermal/thermal_zone*/temp  查看所有8个类型温度
     glob(THERMAL_ZONE_GLOB, GLOB_TILDE, NULL, &globResult);
-    // 遍历thermal zones所有类型的温度的平均值
+    // 遍历thermal zones所有类型的温度的平均值 0-7
     for (unsigned i = 0; i < globResult.gl_pathc; ++i) {
-        averageTemp += readIntSysFs(globResult.gl_pathv[i]);
+        thermal_zone = readIntSysFs(globResult.gl_pathv[i]);
+        if (i == 6)
+            thermal_zone = 0; // 剔除第七个明显偏高温度
+        averageTemp += thermal_zone;
+        //        averageTemp += readIntSysFs(globResult.gl_pathv[i]);
     }
-    averageTemp = (averageTemp / globResult.gl_pathc) / 1000;
+    averageTemp = (averageTemp / (globResult.gl_pathc - 1)) / 1000;
     //    globfree(&globResult); // cleanup
     return averageTemp;
 }

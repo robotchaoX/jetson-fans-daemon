@@ -11,7 +11,7 @@
 #include <thread>
 
 // the following three defines can be modified to change the daemon behaviour
-#define FAN_OFF_TEMP 20   // oC
+#define FAN_OFF_TEMP 30   // oC
 #define FAN_MAX_TEMP 60   // oC
 #define UPDATE_INTERVAL 2 // second
 // end of modifiable code
