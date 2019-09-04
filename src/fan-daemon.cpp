@@ -1,8 +1,8 @@
 /* Jetson Nano Fan Control Daemon
-
+ *
  * MIT License
  *
- * Copyright (c) 2019 William Hooper
+ * Copyright (c) 2019 William Hooper,robotchaoX
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -47,8 +47,8 @@ void exit_handler(int sig) {
  */
 // 信号的发送者可以是 user 也可以是 kernel
 void init_exit_handler() {
-    struct sigaction
-        sigIntHandler; // 定义一个信号动作 // Structure describing the action to be taken when a signal arrives.
+    struct sigaction sigIntHandler; // 定义一个信号动作
+    // Structure describing the action to be taken when a signal arrives.
 
     sigIntHandler.sa_handler = exit_handler; // .sa_handler信号处理函数
     sigemptyset(&sigIntHandler.sa_mask); // 清空屏蔽的信号  // .sa_mask设置在处理该信号时暂时将sa_mask指定的信号搁置.
@@ -141,13 +141,43 @@ int writeIntSysFs(string path, unsigned value) {
 }
 
 /**
+ * Read fan speed
+ */
+int readFanSpeed() {
+    int fanSpeed = 0;
+    fanSpeed = readIntSysFs(TARGET_PWM);
+    if (fanSpeed < 0) {
+        cout << "readFanSpeed error : " << fanSpeed << endl;
+    }
+    return fanSpeed;
+}
+
+/**
+ * set fan speed to an unsigned integer value
+ */
+int setFanSpeed(unsigned speedValue) { writeIntSysFs(TARGET_PWM, speedValue); }
+
+/**
+ * Get the PWM cap. This is maximum value that the fan PWM channel can support
+ */
+int getPwmCap() {
+    int pwmCap = 0;
+    pwmCap = readIntSysFs(PWM_CAP);
+    if (pwmCap <= 0) {
+        cout << "getPwmCap error : " << pwmCap << endl;
+    }
+    return pwmCap;
+}
+
+/**
  * Read the average temperature. The function reads all thermal zones and returns the average.
  *
  */
 float readAverageTemp() {
     float averageTemp = 0;
-    glob_t globResult;
     int thermal_zone;
+    glob_t globResult;
+
     // glob() // find pathnames matching a pattern,Linux文件系统中路径名称的模式匹配，
     // 查找文件系统中指定模式的路径名
     //    typedef struct
@@ -173,11 +203,6 @@ float readAverageTemp() {
 }
 
 /**
- * Get the PWM cap. This is maximum value that the fan PWM channel can support
- */
-int getPwmCap() { return readIntSysFs(PWM_CAP); }
-
-/**
  * Return the adjusted PWM fan speed. Calculated from the provided temperature and the
  * fan PWM cap value.
  */
@@ -186,14 +211,15 @@ unsigned adjustFanSpeed(float tempe, int fanOffTempe, int fanMaxTempe) {
     static unsigned pwmCap; // maximum value that the fan PWM channel can support
     unsigned fanPWMSpeed = 0;
     if (pwmCap <= 0) {
-        pwmCap = readIntSysFs(PWM_CAP); // PWM maximum value
-        //    pwmCap = getPwmCap(); // PWM maximum value
+        pwmCap = readIntSysFs(PWM_CAP); // PWM maximum value 255
+        //    pwmCap = getPwmCap(); // PWM maximum value 255
         cout << "pwmCap:" << pwmCap << endl;
     }
     //    fanPWMSpeed = pwmCap * (tempe - fanOffTempe) / (fanMaxTempe - fanOffTempe); // #define
     // upper real FAN_OFF_TEMP = (FAN_MAX_TEMP + 4 * FAN_OFF_TEMP) / 5
-    fanPWMSpeed = pwmCap * ((tempe - fanOffTempe) / (fanMaxTempe - fanOffTempe) * 0.8 + 0.2); // #define
-    if (fanPWMSpeed <= pwmCap * 0.2) // 太慢就不需要转了
+    fanPWMSpeed = pwmCap * ((tempe - fanOffTempe) / (fanMaxTempe - fanOffTempe) * 0.6 + 0.4); // #define
+    //    cout << fanPWMSpeed << endl;
+    if (fanPWMSpeed <= pwmCap * 0.4) // 太慢就不需要转了
         fanPWMSpeed = 0;
     else if (fanPWMSpeed >= pwmCap)
         fanPWMSpeed = pwmCap;
@@ -208,14 +234,15 @@ unsigned adjustFanSpeed(float tempe, int fanOffTempe, int fanMaxTempe) {
  */
 // int thermalControl() {
 int thermalControl(int updateInterval_s) {
-    float temperature;        // temperature
+    float temperature = 0;    // temperature
     unsigned fanPWMValue = 0; // 0-255
 
     temperature = readAverageTemp();
-    cout << "temperature:" << temperature << endl;
+    cout << "temperature: " << temperature << endl;
     fanPWMValue = adjustFanSpeed(temperature);
-    cout << "fanPWMValue:" << fanPWMValue << endl;
-    writeIntSysFs(TARGET_PWM, fanPWMValue);
+    setFanSpeed(fanPWMValue);
+    cout << "fanPWMValue: " << readFanSpeed() << endl;
+    //    cout << "fanPWMValue: " << fanPWMValue << endl;
     // 阻塞当前线程rel_time的时间
     this_thread::sleep_for(chrono::milliseconds(updateInterval_s * 1000)); // milliseconds 毫秒
 }
